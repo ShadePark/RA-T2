@@ -96,7 +96,8 @@ def get_rebalancing_dates(indexed_data: pd.DataFrame | pd.Series, period: str = 
         base = indexed_data
 
     rebalancing_dates = base.groupby(pd.Grouper(freq=freq)).apply(lambda x: x.index[0])  # 첫번째 날짜
-    return pd.DatetimeIndex(rebalancing_dates.sort_index())
+    # return pd.DatetimeIndex(rebalancing_dates.sort_index())
+    return rebalancing_dates.sort_index()
 
 
 def plot_portfolio_result(
@@ -288,7 +289,7 @@ STATIC_WEIGHT: Dict[str, float] = {
     "VGIT": 0.03,
 }
 
-DYNAMIC_COLS = ["IEF", "GLD", "BIL", "SPY", "QQQ", "XLE"]
+DYNAMIC_COLS = ['GLD', 'BIL', 'XLE', 'SPY', 'QQQ']
 
 
 @dataclass
@@ -410,12 +411,12 @@ def _build_dynamic_weights(close_data: pd.DataFrame, start: str, end: str) -> pd
     TRD_1M = 21
     TRD_3M = 63
 
-    W_RISK_OFF_DEF = {"GLD": 0.60, "BIL": 0.40}
-    W_RISK_OFF_INF = {"IEF": 0.70, "XLE": 0.30}
-    W_RECOVERY_DEF = {"GLD": 0.60, "BIL": 0.40}
-    W_RECOVERY_INF = {"IEF": 0.70, "XLE": 0.30}
-    W_RISK_ON_WEAK = {"SPY": 1.00}
-    W_RISK_ON_STRONG = {"QQQ": 1.00}
+    W_RISK_OFF_DEF = {'GLD': 0.5, 'BIL': 0.5}
+    W_RISK_OFF_INF = {'BIL': 0.7, 'XLE': 0.3}
+    W_RECOVERY_DEF = {'BIL': 1.0}
+    W_RECOVERY_INF = {'GLD': 0.6, 'BIL': 0.2, 'SPY': 0.1, 'XLE': 0.1}
+    W_RISK_ON_WEAK = {'GLD': 0.7, 'SPY': 0.3}
+    W_RISK_ON_STRONG = {'GLD': 0.3, 'QQQ': 0.7}
 
     spy = close_data["SPY"]
     spy_ma200 = spy.rolling(200).mean()
@@ -556,6 +557,7 @@ def run_total(
 
     # Rebalancing anchors: last trading day of each month (DatetimeIndex)
     rebal_date = get_rebalancing_dates(close_data.loc[start:end])
+    # print(rebal_date)
 
     # static weights per rebal date
     static_weight_df = pd.DataFrame(
@@ -634,9 +636,11 @@ def run_total(
     if anchors[-1] < last_date:
         anchors.append(last_date)
 
-    for period_start, period_end in zip(anchors[:-1], anchors[1:]):
+    # for period_start, period_end in zip(anchors[:-1], anchors[1:]):
+    for period_end, period_start in rebal_date.items():
         # static
         s_slice = s_data.loc[period_start:period_end]
+        # print(f'{period_start}-{period_end}')
         if len(s_slice) < 2:
             continue
         s_asset_flow, s_prev_quantity, s_cash = rebalancing_process(
@@ -677,9 +681,9 @@ def run_total(
     total_portfolio.columns = ["Static", "Dynamic"]
     total_portfolio["Total"] = total_portfolio["Static"] + total_portfolio["Dynamic"]
 
-    total_day_ret = total_portfolio.pct_change(1).fillna(0)
     total_cum_ret = total_portfolio / total_portfolio.iloc[0]
-
+    total_day_ret = total_cum_ret.pct_change().fillna(0)
+    
     # results
     if enable_print:
         print("== 정적 포트폴리오 ==")
